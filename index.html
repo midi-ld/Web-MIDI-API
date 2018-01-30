@@ -1,0 +1,121 @@
+<html>
+  <head>
+    <title>Web MIDI API</title>
+    <script src="https://cdn.jsdelivr.net/npm/webmidi"></script>
+    <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+    <script src="js/rdfstore.js"></script>
+  </head>
+  <body>
+    <h1>rdf pi</h1>
+    <div>
+      <textarea id='rdfin' rows="40" cols="80">@prefix midi: &lt;http://purl.org/midi-ld/midi#&gt; .
+@prefix midi-note: &lt;http://purl.org/midi-ld/notes/&gt; .
+@prefix midi-prog: &lt;http://purl.org/midi-ld/programs/&gt; .
+@prefix prov: &lt;http://www.w3.org/ns/prov#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+@prefix xml: &lt;http://www.w3.org/XML/1998/namespace&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+
+midi:myevent a midi:NoteOnEvent ;
+    midi:channel 4 ;
+    midi:pitch 57 ;
+    midi:velocity 89 .
+</textarea>
+    </div>
+
+    <script>
+
+    var turtleString = "";
+    function getSel() // javascript
+    {
+        // obtain the object reference for the <textarea>
+        var txtarea = document.getElementById("rdfin");
+        // obtain the index of the first selected character
+        var start = txtarea.selectionStart;
+        // obtain the index of the last selected character
+        var finish = txtarea.selectionEnd;
+        // obtain the selected text
+        var sel = txtarea.value.substring(start, finish);
+        // do something with the selected content
+        turtleString = sel;
+    }
+
+    var map = {}; // You could also use an array
+    onkeydown = onkeyup = function(e){
+      e = e || event; // to deal with IE
+      map[e.keyCode] = e.type == 'keydown';
+      if (map[17] && map[13]) {
+        console.log('ctrl enter!!!');
+        // rdfstorejs for parsing turtle
+        rdfstore.create(function(err, store) {
+          getSel();
+          store.load("text/turtle", turtleString, function(err, results) {
+            store.setPrefix('midi', 'http://purl.org/midi-ld/midi#');
+            // simple query execution
+            store.execute("SELECT * { ?s ?p ?o }", function(err, results){
+              if(!err) {
+            	// process results
+                for (var i=0; i<results.length; i++) {
+                  if(results[i].s.token === 'uri') {
+                    var s = results[i].s.value;
+                    var p = results[i].p.value;
+                    var o = results[i].o.value;
+                	  // console.log(s + ' ' + p + ' ' + o);
+                    if (o == "http://purl.org/midi-ld/midi#NoteOnEvent") {
+                      console.log("it's a note on!!");
+                      var query = "PREFIX midi:<http://purl.org/midi-ld/midi#> SELECT * { <"+s+"> midi:channel ?channel}";
+                      //console.log(query);
+                      store.execute(query, function(err, results){
+                        if(!err) {
+                          var channel = results[0].channel.value;
+                          console.log("channel: "+channel);
+                          query = "PREFIX midi:<http://purl.org/midi-ld/midi#> SELECT * { <"+s+"> midi:pitch ?pitch}";
+                          store.execute(query, function(err, results){
+                            if (!err) {
+                              var pitch = results[0].pitch.value;
+                              console.log("pitch: "+pitch);
+                              query = "PREFIX midi:<http://purl.org/midi-ld/midi#> SELECT * { <"+s+"> midi:velocity ?velocity}";
+                              store.execute(query, function(err, results){
+                                var velocity = results[0].velocity.value;
+                                console.log('velocity :'+velocity);
+                                // send the event to the web midi API
+                                // Enable WebMidi.js
+                                WebMidi.enable(function (err) {
+
+                                  if (err) {
+                                    console.log("WebMidi could not be enabled.", err);
+                                  }
+
+                                  // Retrieving an output port/device using its id, name or index
+                                  var output = WebMidi.outputs[1];
+
+                                  // Play a note on all channels of the selected output
+                                  output.playNote(pitch, channel, {duration: 2000, velocity: velocity});
+                                  WebMidi.disable();
+                                });
+
+                              });
+                            }
+                          });
+                        } else{
+                          console.log(err);
+                        }
+                      })
+                    }
+                	}
+                }
+              }
+            });
+            //
+
+          });
+
+        });
+      }
+    };
+
+    console.log('rdf pi ready!');
+    </script>
+  </body<
+</html>
